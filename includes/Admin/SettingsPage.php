@@ -3,6 +3,7 @@ declare( strict_types=1 );
 
 namespace VVKit\Admin;
 
+use VVKit\Seeder;
 use VVKit\Support\Options;
 use VVKit\Support\Translator;
 
@@ -23,6 +24,7 @@ class SettingsPage {
 	public function register(): void {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
 		add_action( 'admin_post_vvkit_i18n_sync', [ $this, 'handle_sync' ] );
+		add_action( 'admin_post_vvkit_seed', [ $this, 'handle_seed' ] );
 	}
 
 	public function register_settings(): void {
@@ -77,6 +79,7 @@ class SettingsPage {
 		add_settings_section( 'vvkit_content', __( 'Content', 'vvkit' ), '__return_null', self::PAGE_SLUG );
 		add_settings_section( 'vvkit_display', __( 'Display', 'vvkit' ), '__return_null', self::PAGE_SLUG );
 		add_settings_section( 'vvkit_i18n', __( 'Multilingual', 'vvkit' ), [ $this, 'section_i18n' ], self::PAGE_SLUG );
+		add_settings_section( 'vvkit_catalog', __( 'Catalog', 'vvkit' ), [ $this, 'section_catalog' ], self::PAGE_SLUG );
 		add_settings_section( 'vvkit_advanced', __( 'Advanced', 'vvkit' ), '__return_null', self::PAGE_SLUG );
 
 		add_settings_field( 'vvkit_post_type', __( 'Post types', 'vvkit' ), [ $this, 'field_post_types' ], self::PAGE_SLUG, 'vvkit_content' );
@@ -89,6 +92,8 @@ class SettingsPage {
 		add_settings_field( 'vvkit_jsonld', __( 'Recipe JSON-LD', 'vvkit' ), [ $this, 'field_jsonld' ], self::PAGE_SLUG, 'vvkit_display' );
 
 		add_settings_field( 'vvkit_i18n_status', __( 'Translatable content', 'vvkit' ), [ $this, 'field_i18n_status' ], self::PAGE_SLUG, 'vvkit_i18n' );
+
+		add_settings_field( 'vvkit_seed', __( 'Starter catalog', 'vvkit' ), [ $this, 'field_seed' ], self::PAGE_SLUG, 'vvkit_catalog' );
 
 		add_settings_field( 'vvkit_delete_data_on_uninstall', __( 'Uninstall', 'vvkit' ), [ $this, 'field_delete_data' ], self::PAGE_SLUG, 'vvkit_advanced' );
 	}
@@ -107,6 +112,28 @@ class SettingsPage {
 					'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
 					esc_html__( 'Translatable strings re-synced.', 'vvkit' )
 				);
+			}
+
+			if ( isset( $_GET['vvkit_seeded_units'] ) || isset( $_GET['vvkit_seeded_ingredients'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display flag.
+				$seeded_units       = isset( $_GET['vvkit_seeded_units'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_units'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$seeded_ingredients = isset( $_GET['vvkit_seeded_ingredients'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_ingredients'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+				if ( $seeded_units || $seeded_ingredients ) {
+					printf(
+						'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+						esc_html( sprintf(
+							/* translators: 1: number of units; 2: number of ingredients. */
+							__( 'Seeded %1$d units and %2$d ingredients.', 'vvkit' ),
+							$seeded_units,
+							$seeded_ingredients
+						) )
+					);
+				} else {
+					printf(
+						'<div class="notice notice-info is-dismissible"><p>%s</p></div>',
+						esc_html__( 'Nothing seeded — the tables already contain data.', 'vvkit' )
+					);
+				}
 			}
 			?>
 			<?php settings_errors(); ?>
@@ -309,6 +336,73 @@ class SettingsPage {
 			[
 				'page'       => self::PAGE_SLUG,
 				'vvkit_i18n' => 'synced',
+			],
+			admin_url( 'admin.php' )
+		) );
+		exit;
+	}
+
+	public function section_catalog(): void {
+		printf(
+			'<p>%s</p>',
+			esc_html__( 'Populate empty tables with a broad English starter set of units and ingredients (compiled from common cooking-blog usage). Tables that already contain data are left untouched.', 'vvkit' )
+		);
+	}
+
+	public function field_seed(): void {
+		$units       = Seeder::units_count();
+		$ingredients = Seeder::ingredients_count();
+
+		echo '<p>';
+		printf(
+			/* translators: 1: number of units; 2: number of ingredients. */
+			esc_html__( 'Current catalog: %1$d units, %2$d ingredients.', 'vvkit' ),
+			(int) $units,
+			(int) $ingredients
+		);
+		echo '</p>';
+
+		$seed_url = wp_nonce_url(
+			admin_url( 'admin-post.php?action=vvkit_seed' ),
+			'vvkit_seed'
+		);
+
+		printf(
+			'<p><a href="%1$s" class="button button-secondary">%2$s</a></p>',
+			esc_url( $seed_url ),
+			esc_html__( 'Seed starter catalog', 'vvkit' )
+		);
+
+		if ( $units > 0 || $ingredients > 0 ) {
+			printf(
+				'<p class="description">%s</p>',
+				esc_html__( 'A table is seeded only when empty, so the populated table(s) above will be skipped.', 'vvkit' )
+			);
+		} else {
+			printf(
+				'<p class="description">%s</p>',
+				esc_html__( 'Both tables are empty and will be filled. Translate the seeded names afterwards in your multilingual plugin.', 'vvkit' )
+			);
+		}
+	}
+
+	/**
+	 * Seeds the empty catalog tables on demand.
+	 */
+	public function handle_seed(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'vvkit' ) );
+		}
+
+		check_admin_referer( 'vvkit_seed' );
+
+		$result = Seeder::run();
+
+		wp_safe_redirect( add_query_arg(
+			[
+				'page'                     => self::PAGE_SLUG,
+				'vvkit_seeded_units'       => (int) $result['units']['inserted'],
+				'vvkit_seeded_ingredients' => (int) $result['ingredients']['inserted'],
 			],
 			admin_url( 'admin.php' )
 		) );

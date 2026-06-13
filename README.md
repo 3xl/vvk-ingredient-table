@@ -333,6 +333,17 @@ Translate the registered strings in **Polylang → Languages → Strings transla
 
 > Plugin **UI** strings (admin labels, buttons, frontend headings) are translated separately via the standard `vvkit` text domain — see Localization below.
 
+## Starter catalog (seeding)
+
+Fresh installs can be bootstrapped with a broad English starter catalog (compiled from common cooking-blog usage): **34 units** with metric/imperial conversion factors and **~320 ingredients** grouped by category.
+
+- Trigger: **Settings → Catalog → "Seed starter catalog"** (manual only; not run on activation).
+- **Safe**: each table is seeded *only when empty*, so a v1-migrated or hand-curated catalog is never modified (the button skips populated tables and reports it).
+- Source language is English; translate the seeded names afterwards in WPML/Polylang (see Multilingual above).
+- Units include conversions (`g`, `kg`, `ml`, `l`, `tsp`=5 ml, `tbsp`=15 ml, `cup`=240 ml, `oz`, `lb`, `fl oz`…) plus count/descriptive units with no conversion (`pcs`, `clove`, `pinch`, `to taste`…).
+
+Implemented in `includes/Seeder.php`.
+
 ## Localization
 
 Translations in `languages/` use WP 6.5+ `.l10n.php` format (PHP instead of `.po` files). Currently Italian (`vvkit-it_IT.l10n.php`).
@@ -352,6 +363,7 @@ wp i18n generate-translations <pot-file> --format=php
 
 ### Unreleased
 - **Multilingual content**: translate ingredient/unit names, table titles, notes and allergen/diet labels via WPML or Polylang (auto-detected). REST `?lang=` parameter for headless consumers; Settings → Multilingual status and re-sync.
+- **Starter catalog seeder**: manual Settings → Catalog action to fill empty units/ingredients tables with a broad English starter set (34 units, ~320 ingredients); never touches a populated catalog.
 
 ### v2.2.2 (Current)
 - Fixed display options tri-state override behavior
