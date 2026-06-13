@@ -1,0 +1,67 @@
+# Build & Dependencies
+/build/
+/node_modules/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.env.production.local
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.sublime-project
+.sublime-workspace
+.phpstorm.meta.php
+php.ini
+
+# OS files
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs & Temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log
+
+# WordPress (if using as standalone dev environment)
+/wp-admin/
+/wp-content/plugins/
+/wp-includes/
+/index.php
+/wp-*.php
+/xmlrpc.php
+
+# PHPUnit
+/phpunit.xml
+.phpunit.result.cache/
+
+# PHP Code Sniffer
+.phpcs-cache
+
+# Knowledge Graph (auto-generated)
+/graphify-out/
+
+# Misc
+.claude/
+*.orig
+*.rej
+.cache
+.vite
+dist/
+coverage/

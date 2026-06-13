@@ -1,0 +1,217 @@
+/* VVK Ingredients Table — admin UI */
+
+.vvkit-app {
+	margin: 8px 0;
+}
+
+.vvkit-loading {
+	display: flex;
+	justify-content: center;
+	padding: 24px;
+}
+
+/* Tabs ------------------------------------------------------------------ */
+
+.vvkit-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+
+/* Table panel ------------------------------------------------------------ */
+
+.vvkit-panel-settings {
+	display: flex;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.vvkit-panel-settings .components-base-control:first-child {
+	flex: 1 1 240px;
+}
+
+.vvkit-panel-positions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin-bottom: 16px;
+	padding: 8px 12px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 2px;
+}
+
+.vvkit-label {
+	font-weight: 600;
+}
+
+/* Add-row form ------------------------------------------------------------ */
+
+.vvkit-add-row {
+	display: flex;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.vvkit-add-row .components-base-control {
+	flex: 0 1 120px;
+}
+
+.vvkit-add-row .components-base-control:nth-child(3) {
+	flex: 1 1 220px;
+}
+
+.vvkit-add-row .components-base-control:nth-child(4) {
+	flex: 1 1 180px;
+}
+
+/* Rows table -------------------------------------------------------------- */
+
+.vvkit-rows {
+	margin-bottom: 16px;
+}
+
+.vvkit-rows .vvkit-col-order,
+.vvkit-rows .vvkit-col-actions {
+	width: 80px;
+	white-space: nowrap;
+}
+
+/* Shortcode --------------------------------------------------------------- */
+
+.vvkit-shortcode {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.vvkit-panel-settings .vvkit-servings-field {
+	flex: 0 0 90px;
+}
+
+.vvkit-panel-display {
+	margin-bottom: 16px;
+	padding: 8px 12px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 2px;
+}
+
+.vvkit-display-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 8px 12px;
+	margin-top: 8px;
+}
+
+.vvkit-panel-display .description {
+	margin: 8px 0 0;
+}
+
+.vvkit-product-flag {
+	margin-left: 4px;
+	opacity: 0.6;
+	font-size: 16px;
+	vertical-align: text-bottom;
+}
+
+/* Modals ------------------------------------------------------------------ */
+
+.vvkit-row-modal,
+.vvkit-modal {
+	max-width: 480px;
+	width: 100%;
+}
+
+.vvkit-ingredient-modal {
+	max-width: 600px;
+}
+
+/* Classic-form modals (manage screens): native form-wrap markup inside. */
+
+.vvkit-modal-form .form-field {
+	margin: 0 0 16px;
+}
+
+.vvkit-modal-form .submit {
+	margin: 16px 0 0;
+	padding: 0;
+}
+
+.vvkit-nutrition-fieldset {
+	margin: 0 0 16px;
+	padding: 0;
+	border: 0;
+}
+
+.vvkit-nutrition-fieldset legend {
+	margin-bottom: 8px;
+	font-weight: 600;
+}
+
+.vvkit-nutrition-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 4px 16px;
+}
+
+.vvkit-nutrition-grid .form-field {
+	margin: 0 0 8px;
+}
+
+.vvkit-chip {
+	display: inline-block;
+	margin: 0 4px 2px 0;
+	padding: 0 8px;
+	border-radius: 10px;
+	font-size: 11px;
+	line-height: 18px;
+	background: #f3dede;
+}
+
+.vvkit-chip--diet {
+	background: #def3e3;
+}
+
+.vvkit-nutrition-flag {
+	opacity: 0.6;
+	font-size: 16px;
+	vertical-align: text-bottom;
+}
+
+.vvkit-row-modal .components-base-control {
+	margin-bottom: 16px;
+}
+
+.vvkit-modal-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+/* Manage screens (ingredients / units) ------------------------------------ */
+/* Layout and table look come from the core admin styles (edit-tags-like
+   markup: search-form, col-container, form-wrap, wp-list-table, bulk
+   actions, native pagination, inline Quick Edit). Only the spacing nudge
+   and the chips below are plugin-specific. */
+
+#vvkit-manage .search-form {
+	margin-bottom: 8px;
+}
+
+/* Snackbars (metabox only) -------------------------------------------------- */
+
+.vvkit-snackbars {
+	position: fixed;
+	bottom: 24px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 100000;
+}

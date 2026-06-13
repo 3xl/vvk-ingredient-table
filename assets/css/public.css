@@ -1,0 +1,79 @@
+/* VVK Ingredients Table — public styles (intentionally minimal: the
+   table look is left to the theme via the configured CSS classes). */
+
+.vvkit-controls {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin: 0 0 12px;
+	font-size: 0.9em;
+}
+
+.vvkit-servings,
+.vvkit-system {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.vvkit-btn {
+	padding: 2px 10px;
+	border: 1px solid currentColor;
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	line-height: 1.4;
+	cursor: pointer;
+}
+
+.vvkit-btn.is-active {
+	background: currentColor;
+}
+
+.vvkit-btn.is-active,
+.vvkit-system .vvkit-btn.is-active {
+	color: inherit;
+}
+
+.vvkit-system .vvkit-btn.is-active {
+	font-weight: 700;
+	text-decoration: underline;
+	background: transparent;
+}
+
+.vvkit-servings-value {
+	min-width: 1.5em;
+	text-align: center;
+	font-weight: 700;
+}
+
+.vvkit-note {
+	opacity: 0.75;
+	font-style: italic;
+}
+
+.vvkit-badge {
+	display: inline-block;
+	margin: 0 4px 4px 0;
+	padding: 1px 8px;
+	border-radius: 10px;
+	font-size: 0.85em;
+	background: #f3dede;
+}
+
+.vvkit-badge--diet {
+	background: #def3e3;
+}
+
+.vvkit-allergens,
+.vvkit-diets,
+.vvkit-nutrition {
+	margin: 8px 0 0;
+	font-size: 0.9em;
+}
+
+.vvkit-nutrition-partial {
+	opacity: 0.7;
+}
