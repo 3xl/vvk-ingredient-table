@@ -33,7 +33,9 @@ final class Plugin {
 		add_filter( 'rest_pre_dispatch', [ $this, 'capture_rest_language' ], 10, 3 );
 
 		if ( is_admin() ) {
-			add_action( 'init', [ Support\Translator::class, 'maybe_register_catalog' ] );
+			// Priority 20: run after the multilingual plugin has set up its
+			// instance on init, so pll_register_string() actually records.
+			add_action( 'init', [ Support\Translator::class, 'maybe_register_catalog' ], 20 );
 		}
 
 		Install::maybe_upgrade();

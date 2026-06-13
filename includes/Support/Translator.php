@@ -263,12 +263,17 @@ final class Translator {
 	 * ------------------------------------------------------------------- */
 
 	/**
-	 * Registers the whole content catalog, but only when it actually
-	 * changed since the last run (cheap to call on every admin request).
-	 * WPML persists registrations, while Polylang needs them present so
-	 * the strings appear on its "Strings translations" screen.
+	 * Registers the whole content catalog with the active backend. Meant to
+	 * run on every admin request.
 	 *
-	 * @param bool $force Re-register even if the signature is unchanged.
+	 * Backend difference that matters here: WPML persists string
+	 * registrations in the database, so when nothing changed we can skip the
+	 * (DB-writing) re-registration via a content signature. Polylang instead
+	 * rebuilds its string list from the pll_register_string() calls made on
+	 * each admin request — skipping would leave its "Strings translations"
+	 * screen empty — so for Polylang we always re-register.
+	 *
+	 * @param bool $force Re-register even when the signature is unchanged (manual re-sync).
 	 */
 	public static function maybe_register_catalog( bool $force = false ): void {
 		if ( ! self::is_active() ) {
@@ -278,7 +283,11 @@ final class Translator {
 		$strings   = self::catalog_strings();
 		$signature = md5( (string) wp_json_encode( wp_list_pluck( $strings, 'value' ) ) );
 
-		if ( ! $force && get_option( self::SIGNATURE_OPTION ) === $signature ) {
+		$can_skip = ! $force
+			&& self::WPML === self::backend()
+			&& get_option( self::SIGNATURE_OPTION ) === $signature;
+
+		if ( $can_skip ) {
 			return;
 		}
 
