@@ -4,6 +4,7 @@ declare( strict_types=1 );
 namespace VVKit\Repository;
 
 use VVKit\Support\Cache;
+use VVKit\Support\Translator;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -100,7 +101,13 @@ class UnitRepository {
 
 		Cache::invalidate();
 
-		return $this->find( (int) $this->db->insert_id );
+		$unit = $this->find( (int) $this->db->insert_id );
+
+		if ( $unit && isset( $data['name'] ) ) {
+			Translator::register_unit( (int) $unit->id, (string) $data['name'] );
+		}
+
+		return $unit;
 	}
 
 	/**
@@ -117,6 +124,10 @@ class UnitRepository {
 		$updated = $this->db->update( $this->table(), $data, [ 'id' => $id ], $formats, [ '%d' ] );
 
 		Cache::invalidate();
+
+		if ( isset( $data['name'] ) ) {
+			Translator::register_unit( $id, (string) $data['name'] );
+		}
 
 		return false !== $updated;
 	}

@@ -30,12 +30,23 @@ final class Presenter {
 		$presented_rows = array_map( [ self::class, 'row' ], $rows );
 		$overrides      = self::display_overrides( $table );
 
-		[ $allergens, $diets ] = self::collect_tags( $presented_rows );
+		[ $allergen_slugs, $diet_slugs ] = self::collect_tags( $presented_rows );
+
+		// Tags are computed on stable slugs (union/intersection); only the
+		// resulting labels are localized for display and headless output.
+		$allergens = array_map(
+			static fn( string $slug ): string => Translator::tag( 'allergen', $slug ),
+			$allergen_slugs
+		);
+		$diets = array_map(
+			static fn( string $slug ): string => Translator::tag( 'diet', $slug ),
+			$diet_slugs
+		);
 
 		return [
 			'id'                => (int) $table->id,
 			'post_id'           => (int) $table->post_id,
-			'title'             => (string) ( $table->title ?? '' ),
+			'title'             => Translator::table_title( (int) $table->id, (string) ( $table->title ?? '' ) ),
 			'title_tagname'     => Options::sanitize_tagname( (string) ( $table->title_tagname ?? 'h2' ) ),
 			'positions'         => $positions,
 			'servings'          => $servings,
@@ -92,25 +103,29 @@ final class Presenter {
 			];
 		}
 
+		$row_id        = (int) $row->id;
+		$unit_id       = (int) ( $row->unit_id ?? 0 );
+		$ingredient_id = (int) $row->ingredient_id;
+
 		return [
-			'id'               => (int) $row->id,
+			'id'               => $row_id,
 			'table_id'         => (int) $row->table_id,
 			'position'         => (int) $row->position,
 			'quantity'         => $quantity,
 			'quantity_display' => Fraction::format( $quantity ),
 			'unit'             => [
-				'id'        => (int) ( $row->unit_id ?? 0 ),
-				'name'      => (string) ( $row->unit_name ?? '' ),
+				'id'        => $unit_id,
+				'name'      => Translator::unit( $unit_id, (string) ( $row->unit_name ?? '' ) ),
 				'dimension' => $dimension,
 				'system'    => ( $row->unit_system ?? null ) ?: null,
 				'factor'    => $factor,
 			],
 			'base'             => $base,
 			'ingredient'       => [
-				'id'   => (int) $row->ingredient_id,
-				'name' => (string) ( $row->ingredient_name ?? '' ),
+				'id'   => $ingredient_id,
+				'name' => Translator::ingredient( $ingredient_id, (string) ( $row->ingredient_name ?? '' ) ),
 			],
-			'note'             => (string) ( $row->note ?? '' ),
+			'note'             => Translator::note( $row_id, (string) ( $row->note ?? '' ) ),
 			'referral'         => (string) ( $row->referral ?? '' ),
 			'product'          => self::product( (int) ( $row->product_id ?? 0 ) ),
 		];

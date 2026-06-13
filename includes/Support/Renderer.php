@@ -46,7 +46,7 @@ final class Renderer {
 		$catalog = array_map(
 			static fn( object $unit ): array => [
 				'id'        => (int) $unit->id,
-				'name'      => (string) $unit->name,
+				'name'      => Translator::unit( (int) $unit->id, (string) $unit->name ),
 				'dimension' => ( $unit->dimension ?? null ) ?: null,
 				'system'    => ( $unit->unit_system ?? null ) ?: null,
 				'factor'    => null === ( $unit->value ?? null ) ? null : (float) $unit->value,

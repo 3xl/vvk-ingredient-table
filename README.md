@@ -234,6 +234,15 @@ The plugin exposes ingredient tables via REST in two ways:
    - Detailed schema with all nutritional breakdowns
    - Requires authentication (cookie + nonce)
 
+**Requesting a language** — append `?lang=<code>` to either endpoint to get the content (ingredient/unit names, titles, notes, allergen/diet labels) translated to that language (requires WPML or Polylang and the corresponding string translations):
+
+```
+GET /wp/v2/posts/123?lang=en
+GET /wp-json/vvkit/v1/tables?post_id=123&lang=en
+```
+
+Without `?lang=`, the active site language (or WP locale) is used.
+
 ---
 
 ## Database Schema
@@ -294,6 +303,36 @@ The plugin exposes ingredient tables via REST in two ways:
 
 ---
 
+## Multilingual (WPML / Polylang)
+
+The plugin stores its content (ingredient names, unit names, table titles, row notes, allergen/diet tags) in **custom DB tables**, which WPML and Polylang do not translate automatically — so the plugin bridges them to the multilingual plugin's **String Translation** API.
+
+**How it works**
+
+- A single backend-agnostic layer (`includes/Support/Translator.php`) auto-detects whether **Polylang** or **WPML** is active. With neither installed, content is shown in its original language (no behavior change).
+- Translatable strings are **registered automatically** when content is created or edited (through the repositories). A one-click **"Re-sync translatable strings"** button (Settings → *Multilingual*) registers the entire existing catalog at once — useful after importing data or activating a multilingual plugin on an existing site.
+- Translation is resolved in `Presenter`, the single point shared by the frontend template, the REST API and the JSON-LD output — so a translated string appears everywhere consistently.
+
+**What gets translated**
+
+| Content | Where it's edited | Translated in |
+|---------|-------------------|---------------|
+| Ingredient names | Ingredients page | Frontend, REST, JSON-LD |
+| Unit names | Units page | Frontend (incl. unit conversion), REST |
+| Table titles | Post metabox | Frontend, REST |
+| Row notes | Post metabox | Frontend, REST |
+| Allergen / diet labels | Ingredient tags | Frontend badges, REST |
+
+Translate the registered strings in **Polylang → Languages → Strings translations** or **WPML → String Translation** (string group / context: *VVK Ingredients Table*).
+
+**Active language resolution** (in priority order):
+
+1. The REST `?lang=` parameter (for headless consumers — see below).
+2. The active language of Polylang / WPML.
+3. The WordPress locale (single-language fallback).
+
+> Plugin **UI** strings (admin labels, buttons, frontend headings) are translated separately via the standard `vvkit` text domain — see Localization below.
+
 ## Localization
 
 Translations in `languages/` use WP 6.5+ `.l10n.php` format (PHP instead of `.po` files). Currently Italian (`vvkit-it_IT.l10n.php`).
@@ -310,6 +349,9 @@ wp i18n generate-translations <pot-file> --format=php
 ---
 
 ## Version History
+
+### Unreleased
+- **Multilingual content**: translate ingredient/unit names, table titles, notes and allergen/diet labels via WPML or Polylang (auto-detected). REST `?lang=` parameter for headless consumers; Settings → Multilingual status and re-sync.
 
 ### v2.2.2 (Current)
 - Fixed display options tri-state override behavior

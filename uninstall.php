@@ -37,6 +37,7 @@ foreach ( [
 	'vvkit_jsonld',
 	'vvkit_display_defaults',
 	'vvkit_delete_data_on_uninstall',
+	'vvkit_i18n_signature',
 	'vvkit_version',
 ] as $option ) {
 	delete_option( $option );

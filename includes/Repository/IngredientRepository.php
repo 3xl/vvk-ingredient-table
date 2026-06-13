@@ -4,6 +4,7 @@ declare( strict_types=1 );
 namespace VVKit\Repository;
 
 use VVKit\Support\Cache;
+use VVKit\Support\Translator;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -76,13 +77,21 @@ class IngredientRepository {
 
 		Cache::invalidate();
 
-		return $this->find( (int) $this->db->insert_id );
+		$ingredient = $this->find( (int) $this->db->insert_id );
+
+		if ( $ingredient ) {
+			Translator::register_ingredient( (int) $ingredient->id, $name );
+		}
+
+		return $ingredient;
 	}
 
 	public function update( int $id, string $name ): bool {
 		$updated = $this->db->update( $this->table(), [ 'name' => $name ], [ 'id' => $id ], [ '%s' ], [ '%d' ] );
 
 		Cache::invalidate();
+
+		Translator::register_ingredient( $id, $name );
 
 		return false !== $updated;
 	}

@@ -4,6 +4,7 @@ declare( strict_types=1 );
 namespace VVKit\Repository;
 
 use VVKit\Support\Cache;
+use VVKit\Support\Translator;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -65,6 +66,32 @@ class TagRepository {
 	}
 
 	/**
+	 * Distinct tag slugs grouped by type (used to register translatable
+	 * strings — the badge labels shown on the frontend).
+	 *
+	 * @return array<string,string[]> [ 'allergen' => [...], 'diet' => [...] ]
+	 */
+	public function distinct(): array {
+		$out = [
+			'allergen' => [],
+			'diet'     => [],
+		];
+
+		foreach ( $this->all_map() as $tags ) {
+			foreach ( self::TYPES as $type ) {
+				foreach ( $tags[ $type ] as $slug ) {
+					$out[ $type ][ $slug ] = true;
+				}
+			}
+		}
+
+		return [
+			'allergen' => array_keys( $out['allergen'] ),
+			'diet'     => array_keys( $out['diet'] ),
+		];
+	}
+
+	/**
 	 * @return array<string,string[]> [ 'allergen' => [...], 'diet' => [...] ]
 	 */
 	public function for_ingredient( int $ingredient_id ): array {
@@ -103,6 +130,8 @@ class TagRepository {
 				],
 				[ '%d', '%s', '%s' ]
 			);
+
+			Translator::register_tag( $type, (string) $tag );
 		}
 
 		Cache::invalidate();

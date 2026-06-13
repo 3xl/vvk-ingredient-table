@@ -4,6 +4,7 @@ declare( strict_types=1 );
 namespace VVKit\Admin;
 
 use VVKit\Support\Options;
+use VVKit\Support\Translator;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -21,6 +22,7 @@ class SettingsPage {
 
 	public function register(): void {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
+		add_action( 'admin_post_vvkit_i18n_sync', [ $this, 'handle_sync' ] );
 	}
 
 	public function register_settings(): void {
@@ -74,6 +76,7 @@ class SettingsPage {
 
 		add_settings_section( 'vvkit_content', __( 'Content', 'vvkit' ), '__return_null', self::PAGE_SLUG );
 		add_settings_section( 'vvkit_display', __( 'Display', 'vvkit' ), '__return_null', self::PAGE_SLUG );
+		add_settings_section( 'vvkit_i18n', __( 'Multilingual', 'vvkit' ), [ $this, 'section_i18n' ], self::PAGE_SLUG );
 		add_settings_section( 'vvkit_advanced', __( 'Advanced', 'vvkit' ), '__return_null', self::PAGE_SLUG );
 
 		add_settings_field( 'vvkit_post_type', __( 'Post types', 'vvkit' ), [ $this, 'field_post_types' ], self::PAGE_SLUG, 'vvkit_content' );
@@ -84,6 +87,8 @@ class SettingsPage {
 		add_settings_field( 'vvkit_fractions', __( 'Fractions', 'vvkit' ), [ $this, 'field_fractions' ], self::PAGE_SLUG, 'vvkit_display' );
 		add_settings_field( 'vvkit_display_defaults', __( 'Table extras', 'vvkit' ), [ $this, 'field_display_defaults' ], self::PAGE_SLUG, 'vvkit_display' );
 		add_settings_field( 'vvkit_jsonld', __( 'Recipe JSON-LD', 'vvkit' ), [ $this, 'field_jsonld' ], self::PAGE_SLUG, 'vvkit_display' );
+
+		add_settings_field( 'vvkit_i18n_status', __( 'Translatable content', 'vvkit' ), [ $this, 'field_i18n_status' ], self::PAGE_SLUG, 'vvkit_i18n' );
 
 		add_settings_field( 'vvkit_delete_data_on_uninstall', __( 'Uninstall', 'vvkit' ), [ $this, 'field_delete_data' ], self::PAGE_SLUG, 'vvkit_advanced' );
 	}
@@ -96,6 +101,14 @@ class SettingsPage {
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<?php
+			if ( isset( $_GET['vvkit_i18n'] ) && 'synced' === sanitize_key( wp_unslash( $_GET['vvkit_i18n'] ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display flag.
+				printf(
+					'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+					esc_html__( 'Translatable strings re-synced.', 'vvkit' )
+				);
+			}
+			?>
 			<?php settings_errors(); ?>
 			<form method="post" action="options.php">
 				<?php
@@ -223,6 +236,83 @@ class SettingsPage {
 			esc_html__( 'Delete all plugin data (tables, ingredients, units, settings) when the plugin is uninstalled.', 'vvkit' )
 		);
 		printf( '<p class="description">%s</p>', esc_html__( 'Leave unchecked to keep your data for a future reinstall.', 'vvkit' ) );
+	}
+
+	public function section_i18n(): void {
+		printf(
+			'<p>%s</p>',
+			esc_html__( 'Translate the table content (ingredient and unit names, table titles, notes and allergen/diet labels) with WPML or Polylang. The plugin UI labels are translated separately through the language packs.', 'vvkit' )
+		);
+	}
+
+	public function field_i18n_status(): void {
+		$active = Translator::is_active();
+
+		if ( ! $active ) {
+			printf(
+				'<p class="description">%s</p>',
+				esc_html__( 'No multilingual plugin detected. Install and activate WPML or Polylang to translate the table content; without one the content is shown in its original language.', 'vvkit' )
+			);
+
+			return;
+		}
+
+		echo '<p>';
+		printf(
+			/* translators: 1: multilingual plugin name (WPML/Polylang); 2: active language code. */
+			esc_html__( 'Detected: %1$s · current language: %2$s', 'vvkit' ),
+			'<strong>' . esc_html( Translator::backend_label() ) . '</strong>', // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inline.
+			'<code>' . esc_html( Translator::current_language() ) . '</code>' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inline.
+		);
+		echo '</p>';
+
+		$count = Translator::catalog_count();
+
+		printf(
+			'<p>%s</p>',
+			sprintf(
+				/* translators: %d: number of translatable strings. */
+				esc_html( _n( '%d translatable string registered.', '%d translatable strings registered.', $count, 'vvkit' ) ),
+				(int) $count
+			)
+		);
+
+		$sync_url = wp_nonce_url(
+			admin_url( 'admin-post.php?action=vvkit_i18n_sync' ),
+			'vvkit_i18n_sync'
+		);
+
+		printf(
+			'<p><a href="%1$s" class="button button-secondary">%2$s</a></p>',
+			esc_url( $sync_url ),
+			esc_html__( 'Re-sync translatable strings', 'vvkit' )
+		);
+		printf(
+			'<p class="description">%s</p>',
+			esc_html__( 'Registers every current ingredient, unit, title, note and tag with the active multilingual plugin so they appear in its string translation screen. New and edited content is registered automatically.', 'vvkit' )
+		);
+	}
+
+	/**
+	 * Forces a full re-registration of the translatable content catalog.
+	 */
+	public function handle_sync(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'vvkit' ) );
+		}
+
+		check_admin_referer( 'vvkit_i18n_sync' );
+
+		Translator::maybe_register_catalog( true );
+
+		wp_safe_redirect( add_query_arg(
+			[
+				'page'       => self::PAGE_SLUG,
+				'vvkit_i18n' => 'synced',
+			],
+			admin_url( 'admin.php' )
+		) );
+		exit;
 	}
 
 	/* ---------------------------------------------------------------------

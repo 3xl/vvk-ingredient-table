@@ -4,6 +4,7 @@ declare( strict_types=1 );
 namespace VVKit\Repository;
 
 use VVKit\Support\Cache;
+use VVKit\Support\Translator;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -55,6 +56,27 @@ class RowRepository {
 	}
 
 	/**
+	 * All rows carrying a note (used to register translatable strings).
+	 *
+	 * @return object[]
+	 */
+	public function all_with_notes(): array {
+		$cached = Cache::get( 'rows_with_notes' );
+
+		if ( false !== $cached && is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$results = $this->db->get_results(
+			"SELECT id, note FROM {$this->db->prefix}vvkit_ingredient_table WHERE note IS NOT NULL AND note <> '' ORDER BY id ASC" // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- no user input.
+		);
+
+		Cache::set( 'rows_with_notes', $results );
+
+		return $results;
+	}
+
+	/**
 	 * @return object[]
 	 */
 	public function for_table( int $table_id ): array {
@@ -89,7 +111,13 @@ class RowRepository {
 
 		Cache::invalidate();
 
-		return $this->find( (int) $this->db->insert_id );
+		$row = $this->find( (int) $this->db->insert_id );
+
+		if ( $row && '' !== trim( (string) ( $data['note'] ?? '' ) ) ) {
+			Translator::register_note( (int) $row->id, (string) $data['note'] );
+		}
+
+		return $row;
 	}
 
 	/**
@@ -106,6 +134,10 @@ class RowRepository {
 		$updated = $this->db->update( $this->table(), $data, [ 'id' => $id ], $formats, [ '%d' ] );
 
 		Cache::invalidate();
+
+		if ( isset( $data['note'] ) && '' !== trim( (string) $data['note'] ) ) {
+			Translator::register_note( $id, (string) $data['note'] );
+		}
 
 		return false !== $updated;
 	}

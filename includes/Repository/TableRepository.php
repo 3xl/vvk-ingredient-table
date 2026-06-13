@@ -4,6 +4,7 @@ declare( strict_types=1 );
 namespace VVKit\Repository;
 
 use VVKit\Support\Cache;
+use VVKit\Support\Translator;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -44,6 +45,27 @@ class TableRepository {
 	}
 
 	/**
+	 * All tables that have a title (used to register translatable strings).
+	 *
+	 * @return object[]
+	 */
+	public function all(): array {
+		$cached = Cache::get( 'tables_all' );
+
+		if ( false !== $cached && is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$results = $this->db->get_results(
+			"SELECT id, title FROM {$this->db->prefix}vvkit_tables WHERE title IS NOT NULL AND title <> '' ORDER BY id ASC" // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- no user input.
+		);
+
+		Cache::set( 'tables_all', $results );
+
+		return $results;
+	}
+
+	/**
 	 * @return object[]
 	 */
 	public function for_post( int $post_id ): array {
@@ -81,7 +103,13 @@ class TableRepository {
 
 		Cache::invalidate();
 
-		return $this->find( (int) $this->db->insert_id );
+		$table = $this->find( (int) $this->db->insert_id );
+
+		if ( $table && '' !== trim( $title ) ) {
+			Translator::register_table_title( (int) $table->id, $title );
+		}
+
+		return $table;
 	}
 
 	/**
@@ -98,6 +126,10 @@ class TableRepository {
 		$updated = $this->db->update( $this->table(), $data, [ 'id' => $id ], $formats, [ '%d' ] );
 
 		Cache::invalidate();
+
+		if ( isset( $data['title'] ) && '' !== trim( (string) $data['title'] ) ) {
+			Translator::register_table_title( $id, (string) $data['title'] );
+		}
 
 		return false !== $updated;
 	}
