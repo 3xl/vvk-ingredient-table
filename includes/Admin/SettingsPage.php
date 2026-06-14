@@ -118,16 +118,18 @@ class SettingsPage {
 				$seeded_units       = isset( $_GET['vvkit_seeded_units'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_units'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 				$seeded_ingredients = isset( $_GET['vvkit_seeded_ingredients'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_ingredients'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
+				$seeded_nutrition    = isset( $_GET['vvkit_seeded_nutrition'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_nutrition'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 				$seeded_translations = isset( $_GET['vvkit_seeded_translations'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_translations'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
 				if ( $seeded_units || $seeded_ingredients ) {
 					printf(
 						'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
 						esc_html( sprintf(
-							/* translators: 1: number of units; 2: number of ingredients; 3: number of translation entries. */
-							__( 'Seeded %1$d units and %2$d ingredients (%3$d translations pre-loaded).', 'vvkit' ),
+							/* translators: 1: units; 2: ingredients; 3: nutrition rows; 4: translation entries. */
+							__( 'Seeded %1$d units and %2$d ingredients (%3$d nutrition facts, %4$d translations pre-loaded).', 'vvkit' ),
 							$seeded_units,
 							$seeded_ingredients,
+							$seeded_nutrition,
 							$seeded_translations
 						) )
 					);
@@ -348,7 +350,7 @@ class SettingsPage {
 	public function section_catalog(): void {
 		printf(
 			'<p>%s</p>',
-			esc_html__( 'Populate empty tables with a broad English starter set of units and ingredients (compiled from common cooking-blog usage), with Italian, French, German and Spanish translations pre-loaded into your multilingual plugin. Tables that already contain data are left untouched.', 'vvkit' )
+			esc_html__( 'Populate empty tables with a broad English starter set of units and ingredients (compiled from common cooking-blog usage), with per-100 g nutrition facts and Italian, French, German and Spanish translations pre-loaded into your multilingual plugin. Tables that already contain data are left untouched.', 'vvkit' )
 		);
 	}
 
@@ -384,7 +386,7 @@ class SettingsPage {
 		} else {
 			printf(
 				'<p class="description">%s</p>',
-				esc_html__( 'Both tables are empty and will be filled. IT/FR/DE/ES translations are pre-loaded for the languages configured in your multilingual plugin; refine them there afterwards.', 'vvkit' )
+				esc_html__( 'Both tables are empty and will be filled, including per-100 g nutrition facts. IT/FR/DE/ES translations are pre-loaded for the languages configured in your multilingual plugin; refine them there afterwards.', 'vvkit' )
 			);
 		}
 	}
@@ -403,10 +405,11 @@ class SettingsPage {
 
 		wp_safe_redirect( add_query_arg(
 			[
-				'page'                        => self::PAGE_SLUG,
-				'vvkit_seeded_units'          => (int) $result['units']['inserted'],
-				'vvkit_seeded_ingredients'    => (int) $result['ingredients']['inserted'],
-				'vvkit_seeded_translations'   => (int) $result['translations'],
+				'page'                      => self::PAGE_SLUG,
+				'vvkit_seeded_units'        => (int) $result['units']['inserted'],
+				'vvkit_seeded_ingredients'  => (int) $result['ingredients']['inserted'],
+				'vvkit_seeded_nutrition'    => (int) $result['nutrition'],
+				'vvkit_seeded_translations' => (int) $result['translations'],
 			],
 			admin_url( 'admin.php' )
 		) );

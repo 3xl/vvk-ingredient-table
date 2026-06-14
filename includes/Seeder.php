@@ -34,7 +34,7 @@ final class Seeder {
 	 * Seeds both tables (each only when empty), pre-loads translations for
 	 * what was inserted, and clears the cache.
 	 *
-	 * @return array{units:array{inserted:int,skipped:bool},ingredients:array{inserted:int,skipped:bool},translations:int}
+	 * @return array{units:array{inserted:int,skipped:bool},ingredients:array{inserted:int,skipped:bool},nutrition:int,translations:int}
 	 */
 	public static function run(): array {
 		$units       = self::seed_units();
@@ -64,6 +64,7 @@ final class Seeder {
 				'inserted' => $ingredients['inserted'],
 				'skipped'  => $ingredients['skipped'],
 			],
+			'nutrition'    => $ingredients['nutrition'] ?? 0,
 			'translations' => $translations,
 		];
 	}
@@ -202,10 +203,68 @@ final class Seeder {
 		}
 
 		return [
-			'inserted' => $inserted,
-			'skipped'  => false,
-			'items'    => $items,
+			'inserted'  => $inserted,
+			'skipped'   => false,
+			'items'     => $items,
+			'nutrition' => self::seed_nutrition( $id_by_name ),
 		];
+	}
+
+	/**
+	 * Bulk-inserts per-100 g nutrition facts for the freshly seeded
+	 * ingredients. Ids come from seed_ingredients (table was empty), so no
+	 * existing nutrition rows can collide.
+	 *
+	 * @param array<string,int> $id_by_name Ingredient name => id.
+	 */
+	private static function seed_nutrition( array $id_by_name ): int {
+		global $wpdb;
+
+		if ( ! $id_by_name ) {
+			return 0;
+		}
+
+		$facts    = self::nutrition_data();
+		$table    = $wpdb->prefix . 'vvkit_ingredient_nutrition';
+		$columns  = 'ingredient_id, kcal, fat, saturated_fat, carbs, sugars, protein, fiber, salt';
+		$rows     = [];
+
+		foreach ( $id_by_name as $name => $id ) {
+			if ( ! isset( $facts[ $name ] ) ) {
+				continue;
+			}
+
+			$values = array_map( 'floatval', array_values( $facts[ $name ] ) );
+
+			// Guard against malformed rows: exactly 8 nutrition fields.
+			if ( 8 !== count( $values ) ) {
+				continue;
+			}
+
+			$rows[] = array_merge( [ (int) $id ], $values );
+		}
+
+		$inserted = 0;
+
+		foreach ( array_chunk( $rows, 100 ) as $chunk ) {
+			$placeholders = implode( ',', array_fill( 0, count( $chunk ), '(%d,%f,%f,%f,%f,%f,%f,%f,%f)' ) );
+			$sql          = "INSERT INTO {$table} ({$columns}) VALUES {$placeholders}"; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed columns and placeholder tuples.
+			$flat         = [];
+
+			foreach ( $chunk as $row ) {
+				foreach ( $row as $value ) {
+					$flat[] = $value;
+				}
+			}
+
+			$affected = $wpdb->query( $wpdb->prepare( $sql, $flat ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery
+
+			if ( false !== $affected ) {
+				$inserted += (int) $affected;
+			}
+		}
+
+		return $inserted;
 	}
 
 	/**
@@ -215,5 +274,14 @@ final class Seeder {
 	 */
 	private static function data(): array {
 		return require VVKIT_PLUGIN_DIR . 'includes/data/seed.php';
+	}
+
+	/**
+	 * Loads the per-100 g nutrition reference values keyed by EN name.
+	 *
+	 * @return array<string,array<int,float>>
+	 */
+	private static function nutrition_data(): array {
+		return require VVKIT_PLUGIN_DIR . 'includes/data/nutrition.php';
 	}
 }
