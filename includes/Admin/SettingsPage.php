@@ -118,14 +118,17 @@ class SettingsPage {
 				$seeded_units       = isset( $_GET['vvkit_seeded_units'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_units'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 				$seeded_ingredients = isset( $_GET['vvkit_seeded_ingredients'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_ingredients'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
+				$seeded_translations = isset( $_GET['vvkit_seeded_translations'] ) ? absint( wp_unslash( $_GET['vvkit_seeded_translations'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
 				if ( $seeded_units || $seeded_ingredients ) {
 					printf(
 						'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
 						esc_html( sprintf(
-							/* translators: 1: number of units; 2: number of ingredients. */
-							__( 'Seeded %1$d units and %2$d ingredients.', 'vvkit' ),
+							/* translators: 1: number of units; 2: number of ingredients; 3: number of translation entries. */
+							__( 'Seeded %1$d units and %2$d ingredients (%3$d translations pre-loaded).', 'vvkit' ),
 							$seeded_units,
-							$seeded_ingredients
+							$seeded_ingredients,
+							$seeded_translations
 						) )
 					);
 				} else {
@@ -345,7 +348,7 @@ class SettingsPage {
 	public function section_catalog(): void {
 		printf(
 			'<p>%s</p>',
-			esc_html__( 'Populate empty tables with a broad English starter set of units and ingredients (compiled from common cooking-blog usage). Tables that already contain data are left untouched.', 'vvkit' )
+			esc_html__( 'Populate empty tables with a broad English starter set of units and ingredients (compiled from common cooking-blog usage), with Italian, French, German and Spanish translations pre-loaded into your multilingual plugin. Tables that already contain data are left untouched.', 'vvkit' )
 		);
 	}
 
@@ -381,7 +384,7 @@ class SettingsPage {
 		} else {
 			printf(
 				'<p class="description">%s</p>',
-				esc_html__( 'Both tables are empty and will be filled. Translate the seeded names afterwards in your multilingual plugin.', 'vvkit' )
+				esc_html__( 'Both tables are empty and will be filled. IT/FR/DE/ES translations are pre-loaded for the languages configured in your multilingual plugin; refine them there afterwards.', 'vvkit' )
 			);
 		}
 	}
@@ -400,9 +403,10 @@ class SettingsPage {
 
 		wp_safe_redirect( add_query_arg(
 			[
-				'page'                     => self::PAGE_SLUG,
-				'vvkit_seeded_units'       => (int) $result['units']['inserted'],
-				'vvkit_seeded_ingredients' => (int) $result['ingredients']['inserted'],
+				'page'                        => self::PAGE_SLUG,
+				'vvkit_seeded_units'          => (int) $result['units']['inserted'],
+				'vvkit_seeded_ingredients'    => (int) $result['ingredients']['inserted'],
+				'vvkit_seeded_translations'   => (int) $result['translations'],
 			],
 			admin_url( 'admin.php' )
 		) );

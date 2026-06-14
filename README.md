@@ -335,14 +335,14 @@ Translate the registered strings in **Polylang → Languages → Strings transla
 
 ## Starter catalog (seeding)
 
-Fresh installs can be bootstrapped with a broad English starter catalog (compiled from common cooking-blog usage): **34 units** with metric/imperial conversion factors and **~320 ingredients** grouped by category.
+Fresh installs can be bootstrapped with a broad English starter catalog (compiled from common cooking-blog usage): **34 units** with metric/imperial conversion factors and **319 ingredients** grouped by category.
 
 - Trigger: **Settings → Catalog → "Seed starter catalog"** (manual only; not run on activation).
 - **Safe**: each table is seeded *only when empty*, so a v1-migrated or hand-curated catalog is never modified (the button skips populated tables and reports it).
-- Source language is English; translate the seeded names afterwards in WPML/Polylang (see Multilingual above).
+- **Multilingual out of the box**: source strings are English, and **Italian, French, German and Spanish** translations are pre-loaded into the active multilingual plugin — but only for the languages actually configured on the site (so a 3-language site fills only those three). Refine them afterwards in WPML/Polylang.
 - Units include conversions (`g`, `kg`, `ml`, `l`, `tsp`=5 ml, `tbsp`=15 ml, `cup`=240 ml, `oz`, `lb`, `fl oz`…) plus count/descriptive units with no conversion (`pcs`, `clove`, `pinch`, `to taste`…).
 
-Implemented in `includes/Seeder.php`.
+Data lives in `includes/data/seed.php`; logic in `includes/Seeder.php`. Polylang translations are written via `PLL_MO`, WPML via the String Translation API.
 
 ## Localization
 
@@ -363,7 +363,7 @@ wp i18n generate-translations <pot-file> --format=php
 
 ### Unreleased
 - **Multilingual content**: translate ingredient/unit names, table titles, notes and allergen/diet labels via WPML or Polylang (auto-detected). REST `?lang=` parameter for headless consumers; Settings → Multilingual status and re-sync.
-- **Starter catalog seeder**: manual Settings → Catalog action to fill empty units/ingredients tables with a broad English starter set (34 units, ~320 ingredients); never touches a populated catalog.
+- **Starter catalog seeder**: manual Settings → Catalog action to fill empty units/ingredients tables with a broad English starter set (34 units, 319 ingredients), with IT/FR/DE/ES translations pre-loaded into WPML/Polylang for the site's configured languages; never touches a populated catalog.
 
 ### v2.2.2 (Current)
 - Fixed display options tri-state override behavior

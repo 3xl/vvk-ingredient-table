@@ -4,6 +4,7 @@ declare( strict_types=1 );
 namespace VVKit;
 
 use VVKit\Support\Cache;
+use VVKit\Support\Translator;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -11,8 +12,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * One-off catalog seeder: fills the units and ingredients tables with a
- * broad, cooking-blog-oriented starter set (English source strings; other
- * languages are added afterwards as WPML / Polylang translations).
+ * broad, cooking-blog-oriented starter set (English source strings) and,
+ * when WPML / Polylang is active, pre-loads IT/FR/DE/ES translations for
+ * the seeded items.
  *
  * Safe by design: each table is seeded ONLY when it is empty, so an
  * existing (v1-migrated or hand-curated) catalog is never touched. It is
@@ -25,23 +27,45 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 final class Seeder {
 
+	/** Languages whose translations ship with the seed data. */
+	private const LANGUAGES = [ 'it', 'fr', 'de', 'es' ];
+
 	/**
-	 * Seeds both tables (each only when empty) and clears the cache when
-	 * anything was inserted.
+	 * Seeds both tables (each only when empty), pre-loads translations for
+	 * what was inserted, and clears the cache.
 	 *
-	 * @return array{units:array{inserted:int,skipped:bool},ingredients:array{inserted:int,skipped:bool}}
+	 * @return array{units:array{inserted:int,skipped:bool},ingredients:array{inserted:int,skipped:bool},translations:int}
 	 */
 	public static function run(): array {
-		$result = [
-			'units'       => self::seed_units(),
-			'ingredients' => self::seed_ingredients(),
-		];
+		$units       = self::seed_units();
+		$ingredients = self::seed_ingredients();
 
-		if ( $result['units']['inserted'] || $result['ingredients']['inserted'] ) {
+		$items        = array_merge( $units['items'], $ingredients['items'] );
+		$translations = 0;
+
+		if ( $items ) {
 			Cache::invalidate();
+
+			// Register first (WPML needs the string to exist before it can be
+			// translated; Polylang picks the source up from the value).
+			foreach ( $items as $item ) {
+				Translator::register( $item['name'], $item['source'] );
+			}
+
+			$translations = Translator::import_translations( $items, self::LANGUAGES );
 		}
 
-		return $result;
+		return [
+			'units'        => [
+				'inserted' => $units['inserted'],
+				'skipped'  => $units['skipped'],
+			],
+			'ingredients'  => [
+				'inserted' => $ingredients['inserted'],
+				'skipped'  => $ingredients['skipped'],
+			],
+			'translations' => $translations,
+		];
 	}
 
 	public static function units_count(): int {
@@ -57,7 +81,7 @@ final class Seeder {
 	}
 
 	/**
-	 * @return array{inserted:int,skipped:bool}
+	 * @return array{inserted:int,skipped:bool,items:array<int,array{name:string,source:string,translations:array<string,string>}>}
 	 */
 	private static function seed_units(): array {
 		global $wpdb;
@@ -66,15 +90,17 @@ final class Seeder {
 			return [
 				'inserted' => 0,
 				'skipped'  => true,
+				'items'    => [],
 			];
 		}
 
 		$table    = $wpdb->prefix . 'vvkit_units';
 		$inserted = 0;
+		$items    = [];
 
-		foreach ( self::units() as $unit ) {
-			// $wpdb->insert renders null values as SQL NULL regardless of
-			// the format hint, so count/descriptive units stay unconverted.
+		foreach ( self::data()['units'] as $unit ) {
+			// $wpdb->insert renders null values as SQL NULL regardless of the
+			// format hint, so count/descriptive units stay unconverted.
 			$ok = $wpdb->insert(
 				$table,
 				[
@@ -86,19 +112,27 @@ final class Seeder {
 				[ '%s', '%f', '%s', '%s' ]
 			);
 
-			if ( $ok ) {
-				++$inserted;
+			if ( ! $ok ) {
+				continue;
 			}
+
+			++$inserted;
+			$items[] = [
+				'name'         => 'unit_' . (int) $wpdb->insert_id,
+				'source'       => (string) $unit['name'],
+				'translations' => (array) ( $unit['t'] ?? [] ),
+			];
 		}
 
 		return [
 			'inserted' => $inserted,
 			'skipped'  => false,
+			'items'    => $items,
 		];
 	}
 
 	/**
-	 * @return array{inserted:int,skipped:bool}
+	 * @return array{inserted:int,skipped:bool,items:array<int,array{name:string,source:string,translations:array<string,string>}>}
 	 */
 	private static function seed_ingredients(): array {
 		global $wpdb;
@@ -107,11 +141,24 @@ final class Seeder {
 			return [
 				'inserted' => 0,
 				'skipped'  => true,
+				'items'    => [],
 			];
 		}
 
-		$table    = $wpdb->prefix . 'vvkit_ingredients';
-		$names    = array_values( array_unique( array_filter( array_map( 'trim', self::ingredients() ) ) ) );
+		$table   = $wpdb->prefix . 'vvkit_ingredients';
+		$entries = self::data()['ingredients'];
+
+		// Source names, de-duplicated, preserving the catalog order.
+		$names = [];
+		foreach ( $entries as $entry ) {
+			$name = trim( (string) $entry['en'] );
+
+			if ( '' !== $name ) {
+				$names[ $name ] = true;
+			}
+		}
+		$names = array_keys( $names );
+
 		$inserted = 0;
 
 		// Multi-row inserts in chunks: names are escaped via prepare (all %s,
@@ -126,150 +173,47 @@ final class Seeder {
 			}
 		}
 
+		// Map the freshly inserted names back to their ids (the table was
+		// empty, so every row here is one we just created).
+		$id_by_name = [];
+		foreach ( $wpdb->get_results( "SELECT id, name FROM {$table}" ) as $row ) { // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery
+			$id_by_name[ (string) $row->name ] = (int) $row->id;
+		}
+
+		$items = [];
+		foreach ( $entries as $entry ) {
+			$name = trim( (string) $entry['en'] );
+			$id   = $id_by_name[ $name ] ?? 0;
+
+			if ( ! $id ) {
+				continue;
+			}
+
+			$items[] = [
+				'name'         => 'ingredient_' . $id,
+				'source'       => $name,
+				'translations' => [
+					'it' => (string) ( $entry['it'] ?? '' ),
+					'fr' => (string) ( $entry['fr'] ?? '' ),
+					'de' => (string) ( $entry['de'] ?? '' ),
+					'es' => (string) ( $entry['es'] ?? '' ),
+				],
+			];
+		}
+
 		return [
 			'inserted' => $inserted,
 			'skipped'  => false,
+			'items'    => $items,
 		];
 	}
 
 	/**
-	 * Starter units with conversion to the base unit (g for mass, ml for
-	 * volume). Count/descriptive units have null dimension/value.
+	 * Loads the seed dataset (units + ingredients with translations).
 	 *
-	 * @return array<int,array{name:string,value:float|null,dimension:string|null,system:string|null}>
+	 * @return array{units:array<int,array<string,mixed>>,ingredients:array<int,array<string,string>>}
 	 */
-	private static function units(): array {
-		return [
-			// Mass — metric (base: g).
-			[ 'name' => 'mg', 'value' => 0.001, 'dimension' => 'mass', 'system' => 'metric' ],
-			[ 'name' => 'g', 'value' => 1.0, 'dimension' => 'mass', 'system' => 'metric' ],
-			[ 'name' => 'kg', 'value' => 1000.0, 'dimension' => 'mass', 'system' => 'metric' ],
-			// Mass — imperial / US.
-			[ 'name' => 'oz', 'value' => 28.3495, 'dimension' => 'mass', 'system' => 'imperial' ],
-			[ 'name' => 'lb', 'value' => 453.592, 'dimension' => 'mass', 'system' => 'imperial' ],
-
-			// Volume — metric (base: ml).
-			[ 'name' => 'ml', 'value' => 1.0, 'dimension' => 'volume', 'system' => 'metric' ],
-			[ 'name' => 'cl', 'value' => 10.0, 'dimension' => 'volume', 'system' => 'metric' ],
-			[ 'name' => 'dl', 'value' => 100.0, 'dimension' => 'volume', 'system' => 'metric' ],
-			[ 'name' => 'l', 'value' => 1000.0, 'dimension' => 'volume', 'system' => 'metric' ],
-			// Volume — imperial / US cooking (rounded kitchen standards).
-			[ 'name' => 'tsp', 'value' => 5.0, 'dimension' => 'volume', 'system' => 'imperial' ],
-			[ 'name' => 'tbsp', 'value' => 15.0, 'dimension' => 'volume', 'system' => 'imperial' ],
-			[ 'name' => 'fl oz', 'value' => 29.5735, 'dimension' => 'volume', 'system' => 'imperial' ],
-			[ 'name' => 'cup', 'value' => 240.0, 'dimension' => 'volume', 'system' => 'imperial' ],
-			[ 'name' => 'pint', 'value' => 473.176, 'dimension' => 'volume', 'system' => 'imperial' ],
-			[ 'name' => 'quart', 'value' => 946.353, 'dimension' => 'volume', 'system' => 'imperial' ],
-			[ 'name' => 'gallon', 'value' => 3785.41, 'dimension' => 'volume', 'system' => 'imperial' ],
-
-			// Count / descriptive — no conversion.
-			[ 'name' => 'pcs', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'clove', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'slice', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'pinch', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'bunch', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'can', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'jar', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'package', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'stick', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'sprig', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'handful', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'drop', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'dash', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'knob', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'head', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'stalk', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'sheet', 'value' => null, 'dimension' => null, 'system' => null ],
-			[ 'name' => 'to taste', 'value' => null, 'dimension' => null, 'system' => null ],
-		];
-	}
-
-	/**
-	 * Broad starter ingredient list compiled from the items most commonly
-	 * used across major cooking blogs, grouped by category.
-	 *
-	 * @return string[]
-	 */
-	private static function ingredients(): array {
-		return [
-			// Flours & baking.
-			'All-purpose flour', 'Bread flour', 'Whole wheat flour', 'Cake flour', 'Self-rising flour',
-			'Almond flour', 'Cornmeal', 'Cornstarch', 'Semolina', 'Rye flour', 'Baking powder',
-			'Baking soda', 'Active dry yeast', 'Instant yeast', 'Cream of tartar', 'Cocoa powder',
-			'Vanilla extract', 'Vanilla bean', 'Almond extract', 'Food coloring',
-
-			// Sugars & sweeteners.
-			'Granulated sugar', 'Brown sugar', 'Powdered sugar', 'Caster sugar', 'Honey', 'Maple syrup',
-			'Corn syrup', 'Molasses', 'Agave syrup', 'Coconut sugar',
-
-			// Dairy & eggs.
-			'Milk', 'Whole milk', 'Skim milk', 'Heavy cream', 'Whipping cream', 'Half-and-half',
-			'Buttermilk', 'Sour cream', 'Yogurt', 'Greek yogurt', 'Butter', 'Unsalted butter',
-			'Margarine', 'Cream cheese', 'Mascarpone', 'Ricotta', 'Cottage cheese', 'Eggs',
-			'Egg yolk', 'Egg white', 'Condensed milk', 'Evaporated milk',
-
-			// Cheeses.
-			'Parmesan', 'Mozzarella', 'Cheddar', 'Gruyere', 'Feta', 'Goat cheese', 'Blue cheese',
-			'Provolone', 'Pecorino', 'Emmental', 'Gorgonzola', 'Brie',
-
-			// Oils & fats.
-			'Olive oil', 'Extra virgin olive oil', 'Vegetable oil', 'Sunflower oil', 'Canola oil',
-			'Coconut oil', 'Sesame oil', 'Peanut oil', 'Lard', 'Shortening', 'Ghee',
-
-			// Vegetables.
-			'Onion', 'Red onion', 'Yellow onion', 'Spring onion', 'Shallot', 'Garlic', 'Leek', 'Carrot',
-			'Celery', 'Potato', 'Sweet potato', 'Tomato', 'Cherry tomato', 'Bell pepper', 'Red bell pepper',
-			'Chili pepper', 'Jalapeno', 'Cucumber', 'Zucchini', 'Eggplant', 'Mushroom', 'Spinach', 'Kale',
-			'Lettuce', 'Arugula', 'Broccoli', 'Cauliflower', 'Cabbage', 'Brussels sprouts', 'Green beans',
-			'Peas', 'Corn', 'Asparagus', 'Beetroot', 'Radish', 'Pumpkin', 'Butternut squash', 'Fennel',
-			'Artichoke', 'Ginger', 'Avocado', 'Olives', 'Capers', 'Sun-dried tomatoes', 'Scallion',
-
-			// Fruits.
-			'Apple', 'Banana', 'Lemon', 'Lime', 'Orange', 'Grapefruit', 'Strawberry', 'Blueberry',
-			'Raspberry', 'Blackberry', 'Grape', 'Peach', 'Pear', 'Plum', 'Cherry', 'Pineapple', 'Mango',
-			'Kiwi', 'Watermelon', 'Cantaloupe', 'Pomegranate', 'Fig', 'Apricot', 'Cranberry', 'Coconut',
-			'Raisins', 'Dates', 'Lemon zest', 'Orange zest',
-
-			// Herbs & spices.
-			'Salt', 'Sea salt', 'Black pepper', 'White pepper', 'Basil', 'Oregano', 'Thyme', 'Rosemary',
-			'Sage', 'Mint', 'Dill', 'Bay leaf', 'Parsley', 'Cilantro', 'Cinnamon', 'Nutmeg', 'Cloves',
-			'Cardamom', 'Cumin', 'Coriander', 'Paprika', 'Smoked paprika', 'Cayenne pepper', 'Chili powder',
-			'Curry powder', 'Garam masala', 'Ginger powder', 'Garlic powder', 'Onion powder', 'Saffron',
-			'Star anise', 'Fennel seeds', 'Mustard seeds', 'Red pepper flakes', 'Allspice', 'Turmeric',
-			'Italian seasoning', 'Herbs de Provence',
-
-			// Proteins — meat & fish.
-			'Chicken breast', 'Chicken thigh', 'Whole chicken', 'Ground beef', 'Beef steak', 'Beef chuck',
-			'Pork chop', 'Pork belly', 'Ground pork', 'Bacon', 'Ham', 'Sausage', 'Prosciutto', 'Salami',
-			'Pancetta', 'Turkey', 'Lamb', 'Veal', 'Salmon', 'Tuna', 'Cod', 'Shrimp', 'Prawns', 'Mussels',
-			'Clams', 'Squid', 'Anchovies', 'Sardines', 'Crab', 'Scallops', 'Tofu', 'Tempeh', 'Seitan',
-
-			// Grains, pasta & bread.
-			'Rice', 'White rice', 'Brown rice', 'Basmati rice', 'Arborio rice', 'Jasmine rice', 'Pasta',
-			'Spaghetti', 'Penne', 'Macaroni', 'Lasagna sheets', 'Noodles', 'Couscous', 'Quinoa', 'Bulgur',
-			'Oats', 'Rolled oats', 'Barley', 'Bread', 'Breadcrumbs', 'Panko breadcrumbs', 'Tortilla',
-			'Pita bread', 'Polenta', 'Gnocchi',
-
-			// Legumes, nuts & seeds.
-			'Chickpeas', 'Black beans', 'Kidney beans', 'White beans', 'Lentils', 'Red lentils',
-			'Split peas', 'Edamame', 'Almonds', 'Walnuts', 'Cashews', 'Pecans', 'Pistachios', 'Hazelnuts',
-			'Peanuts', 'Pine nuts', 'Macadamia nuts', 'Sesame seeds', 'Sunflower seeds', 'Pumpkin seeds',
-			'Chia seeds', 'Flax seeds', 'Poppy seeds', 'Peanut butter', 'Almond butter', 'Tahini',
-
-			// Condiments & sauces.
-			'Soy sauce', 'Worcestershire sauce', 'Fish sauce', 'Hot sauce', 'Sriracha', 'Ketchup',
-			'Mustard', 'Dijon mustard', 'Mayonnaise', 'Vinegar', 'Balsamic vinegar', 'White wine vinegar',
-			'Red wine vinegar', 'Apple cider vinegar', 'Rice vinegar', 'Tomato paste', 'Tomato sauce',
-			'Crushed tomatoes', 'Passata', 'Pesto', 'Hoisin sauce', 'Oyster sauce', 'Barbecue sauce',
-			'Coconut milk', 'Chicken stock', 'Vegetable stock', 'Beef stock', 'Bouillon cube',
-
-			// Liquids & misc.
-			'Water', 'White wine', 'Red wine', 'Beer', 'Rum', 'Brandy', 'Vodka', 'Vermouth', 'Coffee',
-			'Espresso', 'Lemon juice', 'Lime juice', 'Orange juice',
-
-			// Chocolate & sweets.
-			'Dark chocolate', 'Milk chocolate', 'White chocolate', 'Chocolate chips', 'Gelatin',
-			'Marshmallows', 'Caramel',
-		];
+	private static function data(): array {
+		return require VVKIT_PLUGIN_DIR . 'includes/data/seed.php';
 	}
 }

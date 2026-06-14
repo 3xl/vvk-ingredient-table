@@ -259,6 +259,158 @@ final class Translator {
 	}
 
 	/* ---------------------------------------------------------------------
+	 * Translation import (seeding)
+	 * ------------------------------------------------------------------- */
+
+	/**
+	 * Language slugs actually configured on the site for the active backend.
+	 *
+	 * @return string[]
+	 */
+	public static function active_languages(): array {
+		switch ( self::backend() ) {
+			case self::POLYLANG:
+				$langs = function_exists( 'pll_languages_list' ) ? pll_languages_list() : [];
+
+				return is_array( $langs ) ? $langs : [];
+
+			case self::WPML:
+				$langs = apply_filters( 'wpml_active_languages', null );
+
+				return is_array( $langs ) ? array_keys( $langs ) : [];
+		}
+
+		return [];
+	}
+
+	/**
+	 * Pre-loads translations for already-registered strings into the active
+	 * backend, restricted to the languages configured on the site. Used by
+	 * the seeder; identical-to-source and empty translations are skipped.
+	 *
+	 * @param array<int,array{name:string,source:string,translations:array<string,string>}> $items
+	 * @param string[]                                                                       $target_langs
+	 *
+	 * @return int Number of translation entries written.
+	 */
+	public static function import_translations( array $items, array $target_langs ): int {
+		if ( ! self::is_active() || ! $items ) {
+			return 0;
+		}
+
+		$langs = array_values( array_intersect( $target_langs, self::active_languages() ) );
+
+		if ( ! $langs ) {
+			return 0;
+		}
+
+		switch ( self::backend() ) {
+			case self::POLYLANG:
+				return self::import_polylang( $items, $langs );
+
+			case self::WPML:
+				return self::import_wpml( $items, $langs );
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Writes translations into Polylang's per-language string MO (one
+	 * load/export per language).
+	 *
+	 * @param array<int,array<string,mixed>> $items
+	 * @param string[]                       $langs
+	 */
+	private static function import_polylang( array $items, array $langs ): int {
+		if ( ! class_exists( 'PLL_MO' ) || ! function_exists( 'PLL' ) ) {
+			return 0;
+		}
+
+		$pll = PLL();
+
+		if ( ! is_object( $pll ) || ! isset( $pll->model ) ) {
+			return 0;
+		}
+
+		$count = 0;
+
+		foreach ( $langs as $slug ) {
+			$language = $pll->model->get_language( $slug );
+
+			if ( ! $language ) {
+				continue;
+			}
+
+			$mo = new \PLL_MO();
+			$mo->import_from_db( $language );
+
+			foreach ( $items as $item ) {
+				$source      = (string) ( $item['source'] ?? '' );
+				$translation = (string) ( $item['translations'][ $slug ] ?? '' );
+
+				if ( '' === $source || '' === $translation || $translation === $source ) {
+					continue;
+				}
+
+				$mo->add_entry( new \Translation_Entry( [
+					'singular'     => $source,
+					'translations' => [ $translation ],
+				] ) );
+				++$count;
+			}
+
+			$mo->export_to_db( $language );
+		}
+
+		return $count;
+	}
+
+	/**
+	 * Writes translations through WPML's String Translation API (best
+	 * effort: requires the WPML ST module and the strings already registered).
+	 *
+	 * @param array<int,array<string,mixed>> $items
+	 * @param string[]                       $langs
+	 */
+	private static function import_wpml( array $items, array $langs ): int {
+		if ( ! function_exists( 'icl_get_string_id' ) || ! function_exists( 'icl_add_string_translation' ) ) {
+			return 0;
+		}
+
+		$status = defined( 'ICL_TM_COMPLETE' ) ? ICL_TM_COMPLETE : 10;
+		$count  = 0;
+
+		foreach ( $items as $item ) {
+			$source = (string) ( $item['source'] ?? '' );
+			$name   = (string) ( $item['name'] ?? '' );
+
+			if ( '' === $source || '' === $name ) {
+				continue;
+			}
+
+			$string_id = icl_get_string_id( $source, self::DOMAIN, $name );
+
+			if ( ! $string_id ) {
+				continue;
+			}
+
+			foreach ( $langs as $slug ) {
+				$translation = (string) ( $item['translations'][ $slug ] ?? '' );
+
+				if ( '' === $translation || $translation === $source ) {
+					continue;
+				}
+
+				icl_add_string_translation( $string_id, $slug, $translation, $status );
+				++$count;
+			}
+		}
+
+		return $count;
+	}
+
+	/* ---------------------------------------------------------------------
 	 * Catalog registration
 	 * ------------------------------------------------------------------- */
 
